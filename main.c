@@ -161,10 +161,6 @@ void setReturnValueToReturnStack(ReturnStack *paramReturnStack, int *returnValue
  * @param paramException   - the exception which is being added
  */
 void addExceptionToReturnStack(ReturnStack *paramReturnStack, Exception *paramException) {
-    if((void *) paramReturnStack->numberOfExceptions == NULL) {
-        paramReturnStack->numberOfExceptions = 0;
-    }
-
     paramReturnStack->exceptions[paramReturnStack->numberOfExceptions] = *paramException;
     paramReturnStack->numberOfExceptions++;
 }
@@ -200,9 +196,9 @@ struct Buffer {
  * @param paramBuffer       - Buffer to be printed
  * @param paramValuesPerRow - The number of hex values per row
  */
-void printBuffer(Buffer *paramBuffer, int paramValuesPerRow) {
+__attribute__((unused)) void printBuffer(Buffer *paramBuffer, int paramValuesPerRow) {
 
-    printf("Buffer Pointer: %d\nBuffer Size: %d\n\n          ", paramBuffer->bufferPtr, paramBuffer->size);
+    printf("Buffer Pointer: %s\nBuffer Size: %d\n\n          ", paramBuffer->bufferPtr, paramBuffer->size);
 
     for(int index = 0; index < paramValuesPerRow; index++) {
         printf("%02x ", index);
@@ -251,7 +247,7 @@ Buffer *createBuffer(int paramSize) {
 
     Buffer *buffer = (Buffer *) malloc(sizeof(Buffer));
     buffer->size = paramSize;
-    buffer->bufferPtr = (char *)calloc(buffer->size, sizeof(char)); // Enough memory for the file
+    buffer->bufferPtr = (unsigned char *)calloc(buffer->size, sizeof(unsigned char)); // Enough memory for the file
 
     return buffer;
 }
@@ -336,7 +332,7 @@ LinkedList *createLinkedList() {
  * @param paramPointer      - Pointer to the value being stored
  * @return
  */
-LinkedList *addNewLink(LinkedList *paramLinkedList, int *paramPointer) {
+LinkedList *addNewLink(LinkedList *paramLinkedList, unsigned int *paramPointer) {
     while(paramLinkedList->next != NULL) {
         paramLinkedList = paramLinkedList->next;
     }
@@ -753,32 +749,32 @@ void printLongFileName(DirectoryEntry *paramDirectoryEntry, int paramIndentSize)
  * @param paramDate         - date value from directory entry
  * @param paramIndentSize   - number of spaces before printed
  */
-void print16BitDate(uint16_t *paramDate, int paramIndentSize) {
+void print16BitDate(uint16_t paramDate, int paramIndentSize) {
 
     int year = 1980;
 
-    year += (((int) paramDate & 0x0200) >> 9);
-    year += (((int) paramDate & 0x0400) >> 10) * 2;
-    year += (((int) paramDate & 0x0800) >> 11) * 4;
-    year += (((int) paramDate & 0x1000) >> 12) * 8;
-    year += (((int) paramDate & 0x2000) >> 13) * 16;
-    year += (((int) paramDate & 0x4000) >> 14) * 32;
-    year += (((int) paramDate & 0x8000) >> 15) * 64;
+    year += (((long) paramDate & 0x0200) >> 9);
+    year += (((long) paramDate & 0x0400) >> 10) * 2;
+    year += (((long) paramDate & 0x0800) >> 11) * 4;
+    year += (((long) paramDate & 0x1000) >> 12) * 8;
+    year += (((long) paramDate & 0x2000) >> 13) * 16;
+    year += (((long) paramDate & 0x4000) >> 14) * 32;
+    year += (((long) paramDate & 0x8000) >> 15) * 64;
 
     int month = 0;
 
-    month += (((int) paramDate & 0x0020) >> 5);
-    month += (((int) paramDate & 0x0040) >> 6) * 2;
-    month += (((int) paramDate & 0x0080) >> 7) * 4;
-    month += (((int) paramDate & 0x0100) >> 8) * 8;
+    month += (((long) paramDate & 0x0020) >> 5);
+    month += (((long) paramDate & 0x0040) >> 6) * 2;
+    month += (((long) paramDate & 0x0080) >> 7) * 4;
+    month += (((long) paramDate & 0x0100) >> 8) * 8;
 
     int day = 0;
 
-    day += (((int) paramDate & 0x0001));
-    day += (((int) paramDate & 0x0002) >> 1) * 2;
-    day += (((int) paramDate & 0x0004) >> 2) * 4;
-    day += (((int) paramDate & 0x0008) >> 3) * 8;
-    day += (((int) paramDate & 0x0010) >> 4) * 16;
+    day += (((long) paramDate & 0x0001));
+    day += (((long) paramDate & 0x0002) >> 1) * 2;
+    day += (((long) paramDate & 0x0004) >> 2) * 4;
+    day += (((long) paramDate & 0x0008) >> 3) * 8;
+    day += (((long) paramDate & 0x0010) >> 4) * 16;
 
 
     printIndent(paramIndentSize);
@@ -791,15 +787,15 @@ void print16BitDate(uint16_t *paramDate, int paramIndentSize) {
  * @param paramTime         - time value from directory entry
  * @param paramIndentSize   - number of spaces before printed
  */
-void print16BitTimeHour(uint16_t *paramTime, int paramIndentSize) {
+void print16BitTimeHour(uint16_t paramTime, int paramIndentSize) {
 
     int hours = 0;
 
-    hours += (((int) paramTime & 0x0800) >> 11);
-    hours += (((int) paramTime & 0x1000) >> 12) * 2;
-    hours += (((int) paramTime & 0x2000) >> 13) * 4;
-    hours += (((int) paramTime & 0x4000) >> 14) * 8;
-    hours += (((int) paramTime & 0x8000) >> 15) * 16;
+    hours += (((long) paramTime & 0x0800) >> 11);
+    hours += (((long) paramTime & 0x1000) >> 12) * 2;
+    hours += (((long) paramTime & 0x2000) >> 13) * 4;
+    hours += (((long) paramTime & 0x4000) >> 14) * 8;
+    hours += (((long) paramTime & 0x8000) >> 15) * 16;
 
     printIndent(paramIndentSize);
     printf("%d\n", hours);
@@ -811,16 +807,16 @@ void print16BitTimeHour(uint16_t *paramTime, int paramIndentSize) {
  * @param paramTime         - time value from directory entry
  * @param paramIndentSize   - number of spaces before printed
  */
-void print16BitTimeMinute(uint16_t *paramTime, int paramIndentSize) {
+void print16BitTimeMinute(uint16_t paramTime, int paramIndentSize) {
 
     int minutes = 0;
 
-    minutes += (((int) paramTime & 0x0020) >> 5);
-    minutes += (((int) paramTime & 0x0040) >> 6) * 2;
-    minutes += (((int) paramTime & 0x0080) >> 7) * 4;
-    minutes += (((int) paramTime & 0x0100) >> 8) * 8;
-    minutes += (((int) paramTime & 0x0200) >> 9) * 16;
-    minutes += (((int) paramTime & 0x0400) >> 10) * 32;
+    minutes += (((long) paramTime & 0x0020) >> 5);
+    minutes += (((long) paramTime & 0x0040) >> 6) * 2;
+    minutes += (((long) paramTime & 0x0080) >> 7) * 4;
+    minutes += (((long) paramTime & 0x0100) >> 8) * 8;
+    minutes += (((long) paramTime & 0x0200) >> 9) * 16;
+    minutes += (((long) paramTime & 0x0400) >> 10) * 32;
 
     printIndent(paramIndentSize);
     printf("%d\n", minutes);
@@ -832,15 +828,15 @@ void print16BitTimeMinute(uint16_t *paramTime, int paramIndentSize) {
  * @param paramTime         - time value from directory entry
  * @param paramIndentSize   - number of spaces before printed
  */
-void print16BitTime2Seconds(uint16_t *paramTime, int paramIndentSize) {
+void print16BitTime2Seconds(uint16_t paramTime, int paramIndentSize) {
 
     int seconds = 0;
 
-    seconds += (((int) paramTime & 0x0001));
-    seconds += (((int) paramTime & 0x0002) >> 1) * 2;
-    seconds += (((int) paramTime & 0x0004) >> 2) * 4;
-    seconds += (((int) paramTime & 0x0008) >> 3) * 8;
-    seconds += (((int) paramTime & 0x0010) >> 4) * 16;
+    seconds += (((long) paramTime & 0x0001));
+    seconds += (((long) paramTime & 0x0002) >> 1) * 2;
+    seconds += (((long) paramTime & 0x0004) >> 2) * 4;
+    seconds += (((long) paramTime & 0x0008) >> 3) * 8;
+    seconds += (((long) paramTime & 0x0010) >> 4) * 16;
 
     printIndent(paramIndentSize);
     printf("%d\n", seconds * 2);
@@ -853,15 +849,15 @@ void print16BitTime2Seconds(uint16_t *paramTime, int paramIndentSize) {
  * @param paramTenths       - numbers of tenths of seconds
  * @param paramIndentSize   - number of spaces before printed
  */
-void printTimeTenthSeconds(uint16_t *paramTime, uint8_t *paramTenths, int paramIndentSize) {
+void printTimeTenthSeconds(uint16_t paramTime, uint8_t paramTenths, int paramIndentSize) {
 
     double seconds = 0;
 
-    seconds += (((int) paramTime & 0x0001));
-    seconds += (((int) paramTime & 0x0002) >> 1) * 2;
-    seconds += (((int) paramTime & 0x0004) >> 2) * 4;
-    seconds += (((int) paramTime & 0x0008) >> 3) * 8;
-    seconds += (((int) paramTime & 0x0010) >> 4) * 16;
+    seconds += (((long) paramTime & 0x0001));
+    seconds += (((long) paramTime & 0x0002) >> 1) * 2;
+    seconds += (((long) paramTime & 0x0004) >> 2) * 4;
+    seconds += (((long) paramTime & 0x0008) >> 3) * 8;
+    seconds += (((long) paramTime & 0x0010) >> 4) * 16;
 
     seconds *= 2; seconds--;
 
