@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <wchar.h>
 #include <locale.h>
+#include <stdint.h>
 
 /// +--------------------------------------------------------------------------------------------------+
 /// |                                                                                                  |
@@ -1128,7 +1129,7 @@ SearchResult *createSearchResult(DirectoryEntry *paramDirectoryEntry, Buffer *pa
  * @param paramFileLocation - The location of the file being found
  * @return                  - The return stack containing the search result
  */
-ReturnStack *recursiveSearch(BootSector *paramBootSector, Buffer *paramBuffer, LinkedList *paramEntries, wchar_t *paramFileLocation, paramFileLocationLength) {
+ReturnStack *recursiveSearch(BootSector *paramBootSector, Buffer *paramBuffer, LinkedList *paramEntries, wchar_t *paramFileLocation, int paramFileLocationLength) {
 
     ReturnStack *returnStack = createReturnStack();
 
