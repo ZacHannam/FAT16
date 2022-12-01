@@ -58,6 +58,8 @@ void printIndent(int paramIndentSize) {
 
 #define EXCEPTION_UNABLE_TO_OPEN_FILE 1
 #define EXCEPTION_CLUSTER_OUT_OF_RANGE 2
+#define EXCEPTION_FILE_DOES_NOT_EXIST 3
+#define EXCEPTION_PROGRAM_ARGUMENTS 4
 
 /**
  * Stores the id of a singular exception
@@ -119,6 +121,12 @@ void printExceptionsOnReturnStack(ReturnStack *paramReturnStack) {
             case EXCEPTION_CLUSTER_OUT_OF_RANGE:
                 printf("Cluster index out of range for cluster.\n");
                 break;
+            case EXCEPTION_FILE_DOES_NOT_EXIST:
+                printf("The file does not exist.\n");
+                break;
+            case EXCEPTION_PROGRAM_ARGUMENTS:
+                printf("Usage: <FAT16.img> <File Location>\n");
+                break;
             default:
                 printf("Unknown exception occurred.\n");
                 break;
@@ -158,6 +166,13 @@ void addExceptionToReturnStack(ReturnStack *paramReturnStack, Exception *paramEx
 
     paramReturnStack->exceptions[paramReturnStack->numberOfExceptions] = *paramException;
     paramReturnStack->numberOfExceptions++;
+}
+
+uint8_t isExceptionOnReturnStack(ReturnStack *paramReturnStack) {
+    if(paramReturnStack->numberOfExceptions == 0) {
+        return 0;
+    }
+    return 1;
 }
 
 
@@ -203,6 +218,8 @@ void printBuffer(Buffer *paramBuffer, int paramValuesPerRow) {
         printf("%02x ", *(paramBuffer->bufferPtr + index));
 
     }
+
+    printf("\n");
 }
 
 /**
@@ -628,7 +645,6 @@ struct __attribute__((__packed__)) EntryAttributes {
     uint8_t read_only;
 
     uint8_t is_file;
-    uint8_t is_valid;
 
 }; typedef struct EntryAttributes EntryAttributes;
 
@@ -644,7 +660,6 @@ void printEntryAttributes(EntryAttributes *paramEntryAttributes) {
     printf("hidden= %d\n", paramEntryAttributes->hidden);
     printf("read_only= %d\n", paramEntryAttributes->read_only);
     printf("is_file= %d\n", paramEntryAttributes->is_file);
-    printf("is_valid= %d\n", paramEntryAttributes->is_valid);
 }
 
 /**
@@ -657,58 +672,20 @@ ReturnStack *createEntryAttributes(Entry *paramEntry) {
     ReturnStack *returnStack = createReturnStack();
 
     EntryAttributes *entryAttributes = (EntryAttributes *) malloc(sizeof(EntryAttributes));
-    if((paramEntry->DIR_Attr & 0x01) == 0x01) {
-        entryAttributes->read_only = 1;
-    } else {
-        entryAttributes->read_only = 0;
-    }
 
-    if((paramEntry->DIR_Attr & 0x02) == 0x02) {
-        entryAttributes->hidden = 1;
-    } else {
-        entryAttributes->hidden = 0;
-    }
+    entryAttributes->read_only = ((int)paramEntry->DIR_Attr & 0x01);
+    entryAttributes->hidden =  ((int)paramEntry->DIR_Attr & 0x02) >> 1;
+    entryAttributes->system =  ((int)paramEntry->DIR_Attr & 0x04) >> 2;
+    entryAttributes->volume_name =  ((int)paramEntry->DIR_Attr & 0x08) >> 3;
+    entryAttributes->directory =  ((int)paramEntry->DIR_Attr & 0x10) >> 4;
+    entryAttributes->archive =  ((int)paramEntry->DIR_Attr & 0x20) >> 5;
 
-    if((paramEntry->DIR_Attr & 0x04) == 0x04) {
-        entryAttributes->system = 1;
-    } else {
-        entryAttributes->system = 0;
-    }
-
-    if((paramEntry->DIR_Attr & 0x08) == 0x08) {
-        entryAttributes->volume_name = 1;
-    } else {
-        entryAttributes->volume_name = 0;
-    }
-
-    if((paramEntry->DIR_Attr & 0x10) == 0x10) {
-        entryAttributes->directory = 1;
-    } else {
-        entryAttributes->directory = 0;
-    }
-
-    if((paramEntry->DIR_Attr & 0x20) == 0x20) {
-        entryAttributes->archive = 1;
-    } else {
-        entryAttributes->archive = 0;
-    }
-
-    if(!entryAttributes->directory && !entryAttributes->volume_name) {
-        entryAttributes->is_file = 1;
-    } else {
-        entryAttributes->is_file = 0;
-    }
-
-    if(entryAttributes->directory || entryAttributes->volume_name || entryAttributes->is_file) {
-        entryAttributes->is_valid = 1;
-    } else {
-        entryAttributes->is_valid = 0;
-    }
+    entryAttributes->is_file = (!entryAttributes->directory & !entryAttributes->volume_name);
 
     setReturnValueToReturnStack(returnStack, entryAttributes);
 
     return returnStack;
-} // CLEAN UP
+}
 
 /**
  * A Long File Name is a 32 byte array that contains values used in a Long File Name entry in the directory
@@ -768,6 +745,175 @@ void printLongFileName(DirectoryEntry *paramDirectoryEntry, int paramIndentSize)
         printf("%c", paramDirectoryEntry->longFileName[index]);
     }
     printf("\n");
+}
+
+/**
+ * Prints the date to console
+ * @param paramDate         - date value from directory entry
+ * @param paramIndentSize   - number of spaces before printed
+ */
+void print16BitDate(uint16_t *paramDate, int paramIndentSize) {
+
+    int year = 1980;
+
+    year += (((int) paramDate & 0x0200) >> 9);
+    year += (((int) paramDate & 0x0400) >> 10) * 2;
+    year += (((int) paramDate & 0x0800) >> 11) * 4;
+    year += (((int) paramDate & 0x1000) >> 12) * 8;
+    year += (((int) paramDate & 0x2000) >> 13) * 16;
+    year += (((int) paramDate & 0x4000) >> 14) * 32;
+    year += (((int) paramDate & 0x8000) >> 15) * 64;
+
+    int month = 0;
+
+    month += (((int) paramDate & 0x0020) >> 5);
+    month += (((int) paramDate & 0x0040) >> 6) * 2;
+    month += (((int) paramDate & 0x0080) >> 7) * 4;
+    month += (((int) paramDate & 0x0100) >> 8) * 8;
+
+    int day = 0;
+
+    day += (((int) paramDate & 0x0001));
+    day += (((int) paramDate & 0x0002) >> 1) * 2;
+    day += (((int) paramDate & 0x0004) >> 2) * 4;
+    day += (((int) paramDate & 0x0008) >> 3) * 8;
+    day += (((int) paramDate & 0x0010) >> 4) * 16;
+
+
+    printIndent(paramIndentSize);
+    printf("%2d/%2d/%d\n", day, month, year);
+
+}
+
+/**
+ * Prints the time hour to console
+ * @param paramTime         - time value from directory entry
+ * @param paramIndentSize   - number of spaces before printed
+ */
+void print16BitTimeHour(uint16_t *paramTime, int paramIndentSize) {
+
+    int hours = 0;
+
+    hours += (((int) paramTime & 0x0800) >> 11);
+    hours += (((int) paramTime & 0x1000) >> 12) * 2;
+    hours += (((int) paramTime & 0x2000) >> 13) * 4;
+    hours += (((int) paramTime & 0x4000) >> 14) * 8;
+    hours += (((int) paramTime & 0x8000) >> 15) * 16;
+
+    printIndent(paramIndentSize);
+    printf("%d\n", hours);
+
+}
+
+/**
+ * Prints the time minutes to console
+ * @param paramTime         - time value from directory entry
+ * @param paramIndentSize   - number of spaces before printed
+ */
+void print16BitTimeMinute(uint16_t *paramTime, int paramIndentSize) {
+
+    int minutes = 0;
+
+    minutes += (((int) paramTime & 0x0020) >> 5);
+    minutes += (((int) paramTime & 0x0040) >> 6) * 2;
+    minutes += (((int) paramTime & 0x0080) >> 7) * 4;
+    minutes += (((int) paramTime & 0x0100) >> 8) * 8;
+    minutes += (((int) paramTime & 0x0200) >> 9) * 16;
+    minutes += (((int) paramTime & 0x0400) >> 10) * 32;
+
+    printIndent(paramIndentSize);
+    printf("%d\n", minutes);
+
+}
+
+/**
+ * Prints the time within 2 seconds to the console
+ * @param paramTime         - time value from directory entry
+ * @param paramIndentSize   - number of spaces before printed
+ */
+void print16BitTime2Seconds(uint16_t *paramTime, int paramIndentSize) {
+
+    int seconds = 0;
+
+    seconds += (((int) paramTime & 0x0001));
+    seconds += (((int) paramTime & 0x0002) >> 1) * 2;
+    seconds += (((int) paramTime & 0x0004) >> 2) * 4;
+    seconds += (((int) paramTime & 0x0008) >> 3) * 8;
+    seconds += (((int) paramTime & 0x0010) >> 4) * 16;
+
+    printIndent(paramIndentSize);
+    printf("%d\n", seconds * 2);
+
+}
+
+/**
+ * Prints the seconds to 2dp
+ * @param paramTime         - time value from directory entry
+ * @param paramTenths       - numbers of tenths of seconds
+ * @param paramIndentSize   - number of spaces before printed
+ */
+void printTimeTenthSeconds(uint16_t *paramTime, uint8_t *paramTenths, int paramIndentSize) {
+
+    double seconds = 0;
+
+    seconds += (((int) paramTime & 0x0001));
+    seconds += (((int) paramTime & 0x0002) >> 1) * 2;
+    seconds += (((int) paramTime & 0x0004) >> 2) * 4;
+    seconds += (((int) paramTime & 0x0008) >> 3) * 8;
+    seconds += (((int) paramTime & 0x0010) >> 4) * 16;
+
+    seconds *= 2; seconds--;
+
+    seconds += (int) paramTenths / 100;
+
+    printIndent(paramIndentSize);
+    printf("%00.00f\n", seconds);
+
+
+}
+
+/**
+ * Pretty prints the directory entry to console
+ * @param paramDirectoryEntry - The directory entry being printed
+ * @param paramIndentSize     - The indent size of the print
+ */
+void printDirectoryEntry(DirectoryEntry *paramDirectoryEntry, int paramIndentSize) {
+    printf("-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-\n");
+    printf("File Name: ");
+    printLongFileName(paramDirectoryEntry, paramIndentSize);
+
+    printf("File Size: %d bytes\n", paramDirectoryEntry->entry->DIR_FileSize);
+
+    printf("\nFile Attributes:\n");
+    if(paramDirectoryEntry->entryAttributes->archive) printf("- Archive\n");
+    if(paramDirectoryEntry->entryAttributes->directory) printf("- Directory\n");
+    if(paramDirectoryEntry->entryAttributes->volume_name) printf("- Volume Name\n");
+    if(paramDirectoryEntry->entryAttributes->system) printf("- System\n");
+    if(paramDirectoryEntry->entryAttributes->hidden) printf("- Hidden\n");
+    if(paramDirectoryEntry->entryAttributes->read_only) printf("- Read Only\n");
+
+    printf("\nCreation Date: ");
+    print16BitDate(paramDirectoryEntry->entry->DIR_CrtDate, 0);
+    printf("Creation Time:\n- Hours: ");
+    print16BitTimeHour(paramDirectoryEntry->entry->DIR_CrtTime, 0);
+    printf("- Minutes: ");
+    print16BitTimeMinute(paramDirectoryEntry->entry->DIR_CrtTime, 0);
+    printf("- Seconds: ");
+    printTimeTenthSeconds(paramDirectoryEntry->entry->DIR_CrtTime, paramDirectoryEntry->entry->DIR_CrtTimeTenth, 0);
+
+    printf("\nLast Access Date: ");
+    print16BitDate(paramDirectoryEntry->entry->DIR_LstAccDate, 0);
+
+    printf("\nLast Write Date: ");
+    print16BitDate(paramDirectoryEntry->entry->DIR_WrtDate, 0);
+    printf("Last Write Time:\n- Hours: ");
+    print16BitTimeHour(paramDirectoryEntry->entry->DIR_WrtTime, 0);
+    printf("- Minutes: ");
+    print16BitTimeMinute(paramDirectoryEntry->entry->DIR_WrtTime, 0);
+    printf("- Seconds (2): ");
+    print16BitTime2Seconds(paramDirectoryEntry->entry->DIR_WrtTime, 0);
+
+    printf("-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-\n\n");
 }
 
 /**
@@ -942,34 +1088,106 @@ ReturnStack *getAllEntriesFromRootDirectory(BootSector *paramBootSector, Buffer 
 
 /// +--------------------------------------------------------------------------------------------------+
 /// |                                                                                                  |
-/// |                                                Tree                                              |
+/// |                                              Search                                              |
 /// |                                                                                                  |
 /// +--------------------------------------------------------------------------------------------------+
 
-void tree(BootSector *paramBootSector, Buffer *paramBuffer, LinkedList *paramEntries) {
+/*
+ * Uses other functions to aid all methods in searching for a file within the FAT16 image
+ */
+
+/**
+ * A search result contains the result which is found in the buffer and the directory entry which it corresponds to
+ */
+struct SearchResult {
+    DirectoryEntry *directoryEntryPtr;
+    Buffer *bufferPtr;
+}; typedef struct SearchResult SearchResult;
+
+/**
+ * Creates a search result struct
+ * @param paramDirectoryEntry - The Directory Entry
+ * @param paramBuffer         - The buffer containing the file found
+ * @return                    - Returns a new search result with these values
+ */
+SearchResult *createSearchResult(DirectoryEntry *paramDirectoryEntry, Buffer *paramBuffer) {
+
+    SearchResult *searchResult = (SearchResult *) malloc(sizeof(SearchResult));
+
+    searchResult->bufferPtr = paramBuffer;
+    searchResult->directoryEntryPtr = paramDirectoryEntry;
+
+    return searchResult;
+}
+
+/**
+ * Recursively search through each directory then sub directory until the file is found
+ * @param paramBootSector   - Boot Sector of the program
+ * @param paramBuffer       - The bytes of the entire file
+ * @param paramEntries      - The directory entries being searched through
+ * @param paramFileLocation - The location of the file being found
+ * @return                  - The return stack containing the search result
+ */
+ReturnStack *recursiveSearch(BootSector *paramBootSector, Buffer *paramBuffer, LinkedList *paramEntries, wchar_t *paramFileLocation, paramFileLocationLength) {
+
+    ReturnStack *returnStack = createReturnStack();
+
+    /*
+     * Break down the file path
+     *
+     * searchEnquiry is the entry being searched for
+     * remainingFileLocation is the rest of the file location to be searched for
+     */
+    int searchEnquiryLength = 0;
+    for(; searchEnquiryLength < paramFileLocationLength; searchEnquiryLength++) {
+        if(paramFileLocation[searchEnquiryLength] == '/') {
+            break;
+        }
+    }
+
+    if(searchEnquiryLength == 0) {
+        addExceptionToReturnStack(returnStack, createException(EXCEPTION_FILE_DOES_NOT_EXIST));
+        return returnStack;
+    }
+
+    wchar_t searchEnquiry[searchEnquiryLength];
+    memcpy(&searchEnquiry, paramFileLocation, searchEnquiryLength * sizeof(wchar_t));
+
+    int remainingFileLocationLength = paramFileLocationLength - searchEnquiryLength - 1;
 
     const int SECTOR_DATA_START = paramBootSector->BPB_RsvdSecCnt + (paramBootSector->BPB_NumFATs * paramBootSector->BPB_FATSz16) + (paramBootSector->BPB_RootEntCnt * 32) / paramBootSector->BPB_BytsPerSec;
     const int BYTES_PER_CLUSTER = paramBootSector->BPB_SecPerClus * paramBootSector->BPB_BytsPerSec;
 
-    LinkedList *entry = paramEntries;
+    LinkedList *entry = paramEntries; // Loading in the first entry null entry at the start of linked list
 
     while(entry->next != NULL) {
-        entry = entry->next;
+        entry = entry->next; // loading in the first non-null entry
+        DirectoryEntry *directoryEntry = entry->pointer; // casting the pointer in the entry to a DirectoryEntry
 
-        DirectoryEntry *directoryEntry = entry->pointer;
+        uint8_t found = 0;
+        if(searchEnquiryLength == directoryEntry->fileNameSize) {
+            if (memcmp(&searchEnquiry, directoryEntry->longFileName, sizeof(wchar_t) * searchEnquiryLength) == 0) {
+                found = 1;
+            }
+        }
 
-        if(directoryEntry->entryAttributes->volume_name) {
-            printf("Volume: ");
-            printLongFileName(directoryEntry, 0);
+        if(!found) {
             continue;
         }
 
-        printLongFileName(directoryEntry, 0);
+        if(directoryEntry->entryAttributes->volume_name && remainingFileLocationLength > 0) {
+            if(remainingFileLocationLength > 0) {
+                wchar_t remainingFileLocation[remainingFileLocationLength];
+                memcpy(&remainingFileLocation, paramFileLocation + searchEnquiryLength + 1,
+                       remainingFileLocationLength * sizeof(wchar_t));
+
+                return recursiveSearch(paramBootSector, paramBuffer, paramEntries, remainingFileLocation, remainingFileLocationLength);
+            }
+        }
 
         int currentCluster = getClusterNFromDirectoryEntry(directoryEntry)->returnedValue;
         int numberOfClusters = getNumberOfClustersInSequence(paramBootSector, paramBuffer, currentCluster)->returnedValue;
         Buffer *clusterData[numberOfClusters];
-
         for(int clusterIndex = 0; clusterIndex < numberOfClusters; clusterIndex++) {
 
             int startSector = ((currentCluster - 2) * paramBootSector->BPB_SecPerClus) + SECTOR_DATA_START;
@@ -986,8 +1204,7 @@ void tree(BootSector *paramBootSector, Buffer *paramBuffer, LinkedList *paramEnt
 
         }
 
-        if(directoryEntry->entryAttributes->is_file) {
-
+        if(paramFileLocationLength - searchEnquiryLength == 0 && directoryEntry->entryAttributes->is_file) {
             Buffer *fileBuffer = createBuffer(directoryEntry->entry->DIR_FileSize);
 
             for(int index = 0; index < numberOfClusters; index++) {
@@ -998,25 +1215,47 @@ void tree(BootSector *paramBootSector, Buffer *paramBuffer, LinkedList *paramEnt
 
 
             }
-            printBufferAsASCII(fileBuffer, 0);
+            SearchResult *searchResult = createSearchResult(directoryEntry, fileBuffer);
+
+            setReturnValueToReturnStack(returnStack, searchResult);
+            return returnStack;
         }
 
         if(directoryEntry->entryAttributes->directory) {
-
             for(int index = 0; index < numberOfClusters; index++) {
+
                 LinkedList *directory = getAllEntriesFromDirectory(clusterData[index], 0)->returnedValue;
-                tree(paramBootSector, paramBuffer, directory);
+                if(remainingFileLocationLength > 0) {
+                    wchar_t remainingFileLocation[remainingFileLocationLength];
+                    memcpy(&remainingFileLocation, paramFileLocation + searchEnquiryLength + 1,
+                           remainingFileLocationLength * sizeof(wchar_t));
+
+
+                    return recursiveSearch(paramBootSector, paramBuffer, directory, remainingFileLocation,
+                                    remainingFileLocationLength);
+                }
             }
         }
+
+
     }
+
+    addExceptionToReturnStack(returnStack, createException(EXCEPTION_FILE_DOES_NOT_EXIST));
+    return returnStack;
 }
 
-void printTree(BootSector *paramBootSector, Buffer *paramBuffer) {
-
+/**
+ * Used to begin a search at the root directory, finding the firs LinkedList of entries
+ * @param paramBootSector   - Boot Sector of the program
+ * @param paramBuffer       - The bytes of the entire file
+ * @param paramFileLocation - The location of the file being found
+ * @return                  - The return stack containing the search result
+ */
+ReturnStack *searchForFile(BootSector *paramBootSector, Buffer *paramBuffer, wchar_t *paramFileLocation, int paramFileLocationLength) {
     LinkedList *rootDirectoryEntries = getAllEntriesFromRootDirectory(paramBootSector, paramBuffer)->returnedValue;
-    tree(paramBootSector, paramBuffer, rootDirectoryEntries);
-
+    return recursiveSearch(paramBootSector, paramBuffer, rootDirectoryEntries, paramFileLocation, paramFileLocationLength);
 }
+
 
 /// +--------------------------------------------------------------------------------------------------+
 /// |                                                                                                  |
@@ -1024,22 +1263,109 @@ void printTree(BootSector *paramBootSector, Buffer *paramBuffer) {
 /// |                                                                                                  |
 /// +--------------------------------------------------------------------------------------------------+
 
-int main() {
+/*
+ * Main methods start off the program and read the starting arguments of the program and the check for errors going along in the program
+ */
+
+/**
+ * Program Arguments contain the value of the image being looked at and the file being found
+ */
+struct ProgramArguments {
+    char *fat16ImageLocation;
+    int fat16ImageLocationLength;
+
+    wchar_t *fileLocation;
+    int fileLocationLength;
+}; typedef struct ProgramArguments ProgramArguments;
+
+/**
+ * Creates the arguments for the program
+ * @param argc  - The number of total arguments
+ * @param argv  - The arguments beginning at 1
+ * @return      - A return stack containing the program arguments
+ */
+ReturnStack *createProgramArguments(int argc, char *argv[]) {
+
+    ReturnStack *returnStack = createReturnStack();
+
+    if(argc != 3) {
+        addExceptionToReturnStack(returnStack, createException(EXCEPTION_PROGRAM_ARGUMENTS));
+        return returnStack;
+    }
+
+    ProgramArguments *programArguments = (ProgramArguments *) malloc(sizeof(ProgramArguments));
+
+    char *fat16ImageLocation = (char *) malloc(sizeof(char) * strlen(argv[1]));
+    memcpy(fat16ImageLocation, argv[1], strlen(argv[1]));
+
+    programArguments->fat16ImageLocation = fat16ImageLocation;
+    programArguments->fat16ImageLocationLength = strlen(fat16ImageLocation);
+
+    wchar_t *fileLocation = (wchar_t *) malloc(sizeof(wchar_t) * strlen(argv[2]));
+
+    for(int index = 0; index < strlen(argv[2]); index++) {
+        memcpy(fileLocation + index, &argv[2][index], 1);
+    }
+
+    programArguments->fileLocation = fileLocation;
+    programArguments->fileLocationLength = strlen(argv[2]);
+
+    setReturnValueToReturnStack(returnStack, programArguments);
+
+    return returnStack;
+
+}
+
+/**
+ * The projects main function
+ * @param argc - The number of total arguments
+ * @param argv - The arguments beginning at 1
+ * @return     - Exit code
+ */
+int main(int argc, char *argv[]) {
 
     setlocale(LC_CTYPE, "");
 
-    FILE *file = openFile("fat16.img")->returnedValue;
-    Buffer *byteStream = convertFileToBuffer(file)->returnedValue;
+
+    ReturnStack *programArgumentsRS = createProgramArguments(argc, argv);
+    if(isExceptionOnReturnStack(programArgumentsRS)) {
+        printExceptionsOnReturnStack(programArgumentsRS);
+        return 0;
+    }
+    ProgramArguments *programArguments = programArgumentsRS->returnedValue;
+
+    ReturnStack *fileRS = openFile(programArguments->fat16ImageLocation);
+    if(isExceptionOnReturnStack(fileRS)) {
+        printExceptionsOnReturnStack(fileRS);
+        return 0;
+    }
+    FILE *file = fileRS->returnedValue;
+
+    ReturnStack *bufferRS = convertFileToBuffer(file);
+    if(isExceptionOnReturnStack(bufferRS)) {
+        printExceptionsOnReturnStack(bufferRS);
+        return 0;
+    }
+    Buffer *buffer = bufferRS->returnedValue;
+
     closeFile(file);
 
-    BootSector *bootSector = createBootSector(byteStream)->returnedValue;
+    ReturnStack *bootSectorRS = createBootSector(buffer);
+    if(isExceptionOnReturnStack(bootSectorRS)) {
+        printExceptionsOnReturnStack(bootSectorRS);
+        return 0;
+    }
+    BootSector *bootSector = bootSectorRS->returnedValue;
 
-    printTree(bootSector, byteStream);
+    ReturnStack *foundFileRS = searchForFile(bootSector, buffer, programArguments->fileLocation, programArguments->fileLocationLength);
+    if(isExceptionOnReturnStack(foundFileRS)) {
+        printExceptionsOnReturnStack(foundFileRS);
+        return 0;
+    }
+    SearchResult *foundFile = foundFileRS->returnedValue;
 
-    //ReturnStack *t = getBytesFromByteStream(byteStream->returnedValue, 0, );
-    //printBuffer(t->returnedValue);
-
-
+    printDirectoryEntry(foundFile->directoryEntryPtr, 0);
+    printBufferAsASCII(foundFile->bufferPtr, 0);
 }
 
 /// +--------------------------------------------------------------------------------------------------+
