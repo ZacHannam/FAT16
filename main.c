@@ -323,6 +323,7 @@ struct LinkedList {
 LinkedList *createLinkedList() {
     LinkedList *linkedList = (LinkedList *) malloc(sizeof(LinkedList));
     linkedList->pointer = NULL;
+    linkedList->next = NULL;
     return linkedList;
 }
 
@@ -1184,6 +1185,7 @@ ReturnStack *recursiveSearch(BootSector *paramBootSector, Buffer *paramBuffer, L
 
         int currentCluster = getClusterNFromDirectoryEntry(directoryEntry)->returnedValue;
         int numberOfClusters = getNumberOfClustersInSequence(paramBootSector, paramBuffer, currentCluster)->returnedValue;
+
         Buffer *clusterData[numberOfClusters];
         for(int clusterIndex = 0; clusterIndex < numberOfClusters; clusterIndex++) {
 
@@ -1205,11 +1207,10 @@ ReturnStack *recursiveSearch(BootSector *paramBootSector, Buffer *paramBuffer, L
             Buffer *fileBuffer = createBuffer(directoryEntry->entry->DIR_FileSize);
 
             for(int index = 0; index < numberOfClusters; index++) {
+
                 memcpy(fileBuffer->bufferPtr + (index * paramBootSector->BPB_BytsPerSec *paramBootSector->BPB_SecPerClus),
                        clusterData[index]->bufferPtr,
-                       paramBootSector->BPB_BytsPerSec * paramBootSector->BPB_SecPerClus);
-
-
+                       clusterData[index]->size);
 
             }
             SearchResult *searchResult = createSearchResult(directoryEntry, fileBuffer);
