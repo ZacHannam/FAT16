@@ -126,7 +126,7 @@ void printExceptionsOnReturnStack(ReturnStack *paramReturnStack) {
                 printf("The file does not exist.\n");
                 break;
             case EXCEPTION_PROGRAM_ARGUMENTS:
-                printf("Usage: <FAT16.img> <File Location>\n");
+                printf("Usage: <FAT16.img> <File Location> <-bs : -e>\n");
                 break;
             default:
                 printf("Unknown exception occurred.\n");
@@ -345,6 +345,13 @@ LinkedList *addNewLink(LinkedList *paramLinkedList, unsigned int *paramPointer) 
     return linkedList;
 }
 
+void appendLinkedList(LinkedList *paramLinkedList1, LinkedList *paramLinkedList2) {
+    while(paramLinkedList1->next != NULL) {
+        paramLinkedList1 = paramLinkedList1->next;
+    }
+    paramLinkedList1->next = paramLinkedList2;
+}
+
 /**
  * Recursively frees memory within a linked list
  * @param paramLinkedList - The linked list to be freed from memory
@@ -445,6 +452,7 @@ struct __attribute__((__packed__)) BootSector {
  * @param paramBootSector - The boot sector to be printed
  */
 void printBootSector(BootSector *paramBootSector) {
+    printf("-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-\n");
     for(int index=0; index<3; index++) {
         printf("BS_jmpBoot[%d]= %d | %08x\n", index, paramBootSector->BS_jmpBoot[index], paramBootSector->BS_jmpBoot[index]);
     }
@@ -473,6 +481,7 @@ void printBootSector(BootSector *paramBootSector) {
     for(int index=0; index<8; index++) {
         printf("BS_FilSysType[%d]= %d | %08x\n", index, paramBootSector->BS_FilSysType[index], paramBootSector->BS_FilSysType[index]);
     }
+    printf("-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-\n");
 }
 
 /**
@@ -595,6 +604,7 @@ struct __attribute__((__packed__)) Entry {
  * @param paramEntry
  */
 void printEntry(Entry *paramEntry) {
+    printf("-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-\n");
     for(int index=0; index<11; index++) {
         printf("DIR_Name[%d]= %d | %08x\n", index, paramEntry->DIR_Name[index], paramEntry->DIR_Name[index]);
     }
@@ -609,6 +619,7 @@ void printEntry(Entry *paramEntry) {
     printf("DIR_WrtDate= %d | %08x\n", paramEntry->DIR_WrtDate, paramEntry->DIR_WrtDate);
     printf("DIR_FstClusLO= %d | %08x\n", paramEntry->DIR_FstClusLO, paramEntry->DIR_FstClusLO);
     printf("DIR_FileSize= %d | %08x\n", paramEntry->DIR_FileSize, paramEntry->DIR_FileSize);
+    printf("-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-\n");
 }
 
 /**
@@ -946,7 +957,6 @@ ReturnStack *getAllEntriesFromDirectory(Buffer *paramBuffer, int paramStartingBy
     int longFileNameEntryCount = 0;
     while(paramBuffer->bufferPtr[startingByte] != 0x00) {
 
-
         if(paramBuffer->bufferPtr[startingByte] == 0xe5) {
             startingByte += sizeof(Entry);
             continue;
@@ -1257,6 +1267,80 @@ ReturnStack *searchForFile(BootSector *paramBootSector, Buffer *paramBuffer, wch
 
 /// +--------------------------------------------------------------------------------------------------+
 /// |                                                                                                  |
+/// |                                              TREE                                                |
+/// |                                                                                                  |
+/// +--------------------------------------------------------------------------------------------------+
+
+/*
+ * The tree is called when the input is for the file to be found is '//'
+ * It recursively prints out every file and directory name
+ */
+
+/**
+ * Recursively print out every sub directory of the directory
+ * @param paramBootSector - The boot sector of the program
+ * @param paramBuffer     - The byte stream of the program
+ * @param paramEntries    - The entries in the directory currently processed
+ * @param paramDepth      - The current depth of the entry
+ * @return
+ */
+void *tree(BootSector *paramBootSector, Buffer *paramBuffer, LinkedList *paramEntries, int paramDepth) {
+
+    ReturnStack *returnStack = createReturnStack();
+
+    const int SECTOR_DATA_START = paramBootSector->BPB_RsvdSecCnt + (paramBootSector->BPB_NumFATs * paramBootSector->BPB_FATSz16) + (paramBootSector->BPB_RootEntCnt * 32) / paramBootSector->BPB_BytsPerSec;
+    const int BYTES_PER_CLUSTER = paramBootSector->BPB_SecPerClus * paramBootSector->BPB_BytsPerSec;
+
+    LinkedList *entry = paramEntries;
+
+    while(entry->next != NULL) {
+        entry = entry->next;
+        DirectoryEntry *directoryEntry = entry->pointer;
+
+        if(directoryEntry->entryAttributes->volume_name) {
+            printf("Volume: ");
+            printLongFileName(directoryEntry, 0);
+            continue;
+        }
+
+        printLongFileName(directoryEntry, paramDepth * 2);
+
+        if(directoryEntry->entryAttributes->directory) {
+
+            int currentCluster = getClusterNFromDirectoryEntry(directoryEntry)->returnedValue;
+            int numberOfClusters = getNumberOfClustersInSequence(paramBootSector, paramBuffer, currentCluster)->returnedValue;
+
+            for(int clusterIndex = 0; clusterIndex < numberOfClusters; clusterIndex++) {
+
+                int startSector = ((currentCluster - 2) * paramBootSector->BPB_SecPerClus) + SECTOR_DATA_START;
+                int startSectorBytes = paramBootSector->BPB_BytsPerSec * startSector;
+
+                Buffer *buffer = getBytesFromByteStream(paramBuffer, startSectorBytes, BYTES_PER_CLUSTER)->returnedValue;
+
+                LinkedList *directory = getAllEntriesFromDirectory(buffer, 0)->returnedValue;
+                tree(paramBootSector, paramBuffer, directory, paramDepth+1);
+
+                currentCluster = getNextClusterFromFat(paramBootSector, paramBuffer, currentCluster)->returnedValue;
+            }
+        }
+    }
+}
+
+/**
+ * Begins the tree at the root directory
+ * @param paramBootSector - The boot sector of the program
+ * @param paramBuffer     - The byte stream of the program
+ * @return
+ */
+void *beginTree(BootSector *paramBootSector, Buffer *paramBuffer) {
+    LinkedList *rootDirectoryEntries = getAllEntriesFromRootDirectory(paramBootSector, paramBuffer)->returnedValue;
+    tree(paramBootSector, paramBuffer, rootDirectoryEntries, 1);
+}
+
+
+
+/// +--------------------------------------------------------------------------------------------------+
+/// |                                                                                                  |
 /// |                                                Main                                              |
 /// |                                                                                                  |
 /// +--------------------------------------------------------------------------------------------------+
@@ -1274,6 +1358,11 @@ struct ProgramArguments {
 
     wchar_t *fileLocation;
     int fileLocationLength;
+
+    uint8_t is_tree;
+    uint8_t print_bootsector;
+    uint8_t print_complete_entry;
+
 }; typedef struct ProgramArguments ProgramArguments;
 
 /**
@@ -1284,9 +1373,13 @@ struct ProgramArguments {
  */
 ReturnStack *createProgramArguments(int argc, char *argv[]) {
 
+    const char PRINT_TREE[] = "//";
+    const char PRINT_BOOTSECTOR[] = "-bs";
+    const char PRINT_COMPLETE_ENTRY[] = "-e";
+
     ReturnStack *returnStack = createReturnStack();
 
-    if(argc != 3) {
+    if(argc < 3) {
         addExceptionToReturnStack(returnStack, createException(EXCEPTION_PROGRAM_ARGUMENTS));
         return returnStack;
     }
@@ -1307,6 +1400,20 @@ ReturnStack *createProgramArguments(int argc, char *argv[]) {
 
     programArguments->fileLocation = fileLocation;
     programArguments->fileLocationLength = strlen(argv[2]);
+
+    if(strcmp(argv[2], PRINT_TREE) == 0) {
+        programArguments->is_tree = 1;
+    }
+
+    for(int otherArgsIndex = 3; otherArgsIndex < argc; otherArgsIndex++) {
+        if(strcmp(argv[otherArgsIndex], PRINT_BOOTSECTOR) == 0) {
+            programArguments->print_bootsector = 1;
+        }
+
+        if(strcmp(argv[otherArgsIndex], PRINT_COMPLETE_ENTRY) == 0) {
+            programArguments->print_complete_entry = 1;
+        }
+    }
 
     setReturnValueToReturnStack(returnStack, programArguments);
 
@@ -1355,15 +1462,28 @@ int main(int argc, char *argv[]) {
     }
     BootSector *bootSector = bootSectorRS->returnedValue;
 
-    ReturnStack *foundFileRS = searchForFile(bootSector, buffer, programArguments->fileLocation, programArguments->fileLocationLength);
-    if(isExceptionOnReturnStack(foundFileRS)) {
-        printExceptionsOnReturnStack(foundFileRS);
-        return 0;
+    if(programArguments->print_bootsector) {
+        printBootSector(bootSector);
     }
-    SearchResult *foundFile = foundFileRS->returnedValue;
 
-    printDirectoryEntry(foundFile->directoryEntryPtr, 0);
-    printBufferAsASCII(foundFile->bufferPtr, 0);
+    if(programArguments->is_tree) {
+        beginTree(bootSector, buffer);
+    } else {
+
+        ReturnStack *foundFileRS = searchForFile(bootSector, buffer, programArguments->fileLocation, programArguments->fileLocationLength);
+        if(isExceptionOnReturnStack(foundFileRS)) {
+            printExceptionsOnReturnStack(foundFileRS);
+            return 0;
+        }
+
+        SearchResult *foundFile = foundFileRS->returnedValue;
+
+        if(programArguments->print_complete_entry) {
+            printEntry(foundFile->directoryEntryPtr->entry);
+        }
+        printDirectoryEntry(foundFile->directoryEntryPtr, 0);
+        printBufferAsASCII(foundFile->bufferPtr, 0);
+    }
 }
 
 /// +--------------------------------------------------------------------------------------------------+
