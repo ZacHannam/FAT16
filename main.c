@@ -1223,18 +1223,24 @@ ReturnStack *recursiveSearch(BootSector *paramBootSector, Buffer *paramBuffer, L
         }
 
         if(directoryEntry->entryAttributes->directory) {
-            for(int index = 0; index < numberOfClusters; index++) {
+            if(remainingFileLocationLength > 0) {
+                wchar_t remainingFileLocation[remainingFileLocationLength];
+                memcpy(&remainingFileLocation, paramFileLocation + searchEnquiryLength + 1,
+                       remainingFileLocationLength * sizeof(wchar_t));
 
-                LinkedList *directory = getAllEntriesFromDirectory(clusterData[index], 0)->returnedValue;
-                if(remainingFileLocationLength > 0) {
-                    wchar_t remainingFileLocation[remainingFileLocationLength];
-                    memcpy(&remainingFileLocation, paramFileLocation + searchEnquiryLength + 1,
-                           remainingFileLocationLength * sizeof(wchar_t));
+                Buffer *directoryBuffer = createBuffer(numberOfClusters * BYTES_PER_CLUSTER);
 
+                for(int index = 0; index < numberOfClusters; index++) {
 
-                    return recursiveSearch(paramBootSector, paramBuffer, directory, remainingFileLocation,
-                                    remainingFileLocationLength);
+                    memcpy(directoryBuffer->bufferPtr + (index * paramBootSector->BPB_BytsPerSec *paramBootSector->BPB_SecPerClus),
+                           clusterData[index]->bufferPtr,
+                           clusterData[index]->size);
+
                 }
+                LinkedList *directory = getAllEntriesFromDirectory(directoryBuffer, 0)->returnedValue;
+
+                return recursiveSearch(paramBootSector, paramBuffer, directory, remainingFileLocation,
+                                       remainingFileLocationLength);
             }
         }
 
