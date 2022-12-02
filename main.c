@@ -345,13 +345,6 @@ LinkedList *addNewLink(LinkedList *paramLinkedList, unsigned int *paramPointer) 
     return linkedList;
 }
 
-void appendLinkedList(LinkedList *paramLinkedList1, LinkedList *paramLinkedList2) {
-    while(paramLinkedList1->next != NULL) {
-        paramLinkedList1 = paramLinkedList1->next;
-    }
-    paramLinkedList1->next = paramLinkedList2;
-}
-
 /**
  * Recursively frees memory within a linked list
  * @param paramLinkedList - The linked list to be freed from memory
